@@ -65,7 +65,6 @@ function Find-ADComputer {
             <Button Name="btnRDP" Content="Session RDP" Height="30" Margin="0,0,0,10"/>
             <Button Name="btnGestion" Content="Gestion de l'ordinateur" Height="30" Margin="0,0,0,10"/>
             <Button Name="btnCShare" Content="Connexion au partage C$ (admin)" Height="30" Margin="0,0,0,10"/>
-            <Button Name="btnUpdate" Content="Lancer la recherche de mises à jour" Height="30" Margin="0,0,0,10"/>
             <Button Name="btnQuit" Content="Quitter" Height="30"/>
         </StackPanel>
     </Grid>
