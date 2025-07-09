@@ -183,4 +183,4 @@ $btnCShare.Add_Click({
     Start-Process runas.exe -ArgumentList "/user:$user", $cmd
 })
 
-$window.ShowDialog() | Out-Null 
+$window.ShowDialog() | Out-Null
