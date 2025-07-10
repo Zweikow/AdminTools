@@ -64,9 +64,9 @@ function Find-ADComputer {
             <Button Name="btnMSRA" Content="Assistance à distance (MSRA)" Height="30" Margin="0,0,0,10"/>
             <Button Name="btnRDP" Content="Session RDP" Height="30" Margin="0,0,0,10"/>
             <Button Name="btnGestion" Content="Gestion de l'ordinateur" Height="30" Margin="0,0,0,10"/>
-            <Button Name="btnCShare" Content="Connexion au partage C$ (admin)" Height="30" Margin="0,0,0,10"/>
-            <Button Name="btnQuit" Content="Quitter" Height="30"/>
+            <Button Name="btnCShare" Content="Connexion au disque C: (admin)" Height="30" Margin="0,0,0,10"/>
         </StackPanel>
+        <Button Name="btnQuit" Content="Quitter" Height="30" Grid.Row="3" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,10"/>
     </Grid>
 </Window>
 "@
@@ -177,9 +177,8 @@ $btnCShare.Add_Click({
     if (-not $selected) { return }
     $target = $selected.Nom
 
-    $user = "admin2"
-    $cmd = "explorer.exe \\$target\C$"
-    Start-Process runas.exe -ArgumentList "/user:$user", $cmd
+    $share = "\\$target\C$"
+    Start-Process explorer.exe $share
 })
 
 $window.ShowDialog() | Out-Null

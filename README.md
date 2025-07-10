@@ -86,6 +86,17 @@
 
 ---
 
+## Gestion du compte administrateur par défaut
+
+- Chaque technicien peut configurer son propre compte administrateur via le bouton « Réglages » dans l’interface graphique.
+- Le nom d’utilisateur et le mot de passe sont stockés de façon chiffrée dans le dossier `%APPDATA%\AdminTools` du profil Windows de l’utilisateur.
+- Le mot de passe est chiffré avec `ConvertFrom-SecureString` et n’est lisible que par l’utilisateur Windows qui l’a saisi.
+- À chaque lancement, le programme lit automatiquement ce compte et l’utilise pour toutes les actions distantes nécessitant des droits administrateur (PowerShell distant, MSG, etc.).
+- **Chaque technicien a son propre compte admin sécurisé et indépendant** : il n’a besoin de le saisir qu’une seule fois par poste/profil Windows.
+- Pour changer de compte ou de mot de passe, il suffit de retourner dans « Réglages ».
+
+---
+
 ## Auteurs
 
 - Projet développé par [Zweikow](https://github.com/Zweikow) et contributeurs.
