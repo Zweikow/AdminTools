@@ -7,5 +7,5 @@ scriptPath = currentDir & "\AdminToolsGUI\AdminToolsGUI-WPF\ScriptAdminGUI-WPF.p
 ' Chemin de PowerShell 7
 pwshPath = "C:\Program Files\PowerShell\7\pwsh.exe"
 ' Commande à exécuter
-cmd = """" & pwshPath & """ -WindowStyle Hidden -File """" & scriptPath & """"
+cmd = """" & pwshPath & """ -WindowStyle Hidden -File """ & scriptPath & """"
 objShell.Run cmd, 0, False 
