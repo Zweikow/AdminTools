@@ -104,7 +104,7 @@ En résumé, tu as construit, étape par étape, un outil d’administration gra
    - Installer Windows Terminal (Microsoft Store)
 
 3. **(Optionnel mais recommandé) Créer un raccourci pour lancer l’application sans terminal**
-   - Place le fichier `Lancer-AdminToolsGUI.vbs` fourni à la racine du projet.
+   - Place le fichier `Lancer-AdminToolsGUI.vbs` fourni à la racine du projet cloné (le chemin est désormais dynamique, donc le dossier peut avoir n'importe quel nom).
    - Crée un raccourci vers ce fichier VBS (clic droit > Créer un raccourci).
    - Clique droit sur le raccourci > **Propriétés** > **Changer d’icône...** et sélectionne ton fichier `.ico` personnalisé.
    - Place le raccourci où tu veux (bureau, menu démarrer, etc.) et épingle-le à la barre des tâches si besoin.
