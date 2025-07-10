@@ -83,7 +83,7 @@ En résumé, tu as construit, étape par étape, un outil d’administration gra
 ## Prérequis
 
 - Windows 10/11
-- PowerShell 7 (pwsh.exe)
+- PowerShell 7 (pwsh.exe) ([Télécharger PowerShell 7.5.2 sur GitHub](https://github.com/PowerShell/PowerShell/releases/tag/v7.5.2))
 - Module PowerShell ActiveDirectory (RSAT)
 - Accès administrateur sur les postes distants pour certaines fonctions
 - Droit d’exécution à distance (WinRM activé pour PowerShell distant)
