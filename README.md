@@ -14,21 +14,19 @@
 
 2. **Ajout des fonctionnalités principales**  
    - **Session PowerShell distante** :  
-     - Intégrée via un bouton qui ouvre une session distante avec `Enter-PSSession` dans Windows Terminal (`wt.exe`), avec ou sans demande d’identifiants selon le contexte.
+     Intégrée via un bouton qui ouvre une session distante avec `Enter-PSSession` dans Windows Terminal (`wt.exe`), avec ou sans demande d’identifiants selon le contexte.
    - **Assistance à distance (MSRA)** :  
-     - Ajout d’un bouton qui lance `msra.exe /offerra <nom_machine>` pour l’assistance à distance.
+     Ajout d’un bouton qui lance `msra.exe /offerra <nom_machine>` pour l’assistance à distance.
    - **Session RDP** :  
-     - Génération d’un fichier `.rdp` dans `%TEMP%`, déplacement dans `C:\temp\RDP`, renommage dynamique, puis ouverture avec `mstsc.exe`.
-     - Correction du nom de fichier pour éviter les caractères interdits.
+     Génération d’un fichier `.rdp` dans `%TEMP%`, déplacement dans `C:\temp\RDP`, renommage dynamique, puis ouverture avec `mstsc.exe`.
+     Correction du nom de fichier pour éviter les caractères interdits.
    - **Gestion de l’ordinateur** :  
-     - Bouton qui lance `compmgmt.msc /computer:\\<nom_machine>` en mode administrateur.
+     Bouton qui lance `compmgmt.msc /computer:\<nom_machine>` en mode administrateur.
    - **Connexion au partage C$ (admin)** :  
-     - Plusieurs essais :  
-       - D’abord avec `runas` (problèmes de fermeture immédiate ou de prompt).
-       - Puis avec `net use` pour mapper le partage avec mot de passe, puis ouverture de l’explorateur.
-       - Finalement, version simple : ouverture directe de `\\<nom_machine>\C$` dans l’explorateur, laissant Windows gérer l’authentification.
-   - **Suppression de fonctionnalités** :  
-     - Suppression de « Manage profil utilisateur », « Lancer la recherche de mises à jour », « Envoyer un message », et « Réglages » pour simplifier l’outil.
+     Plusieurs essais :  
+       D’abord avec `runas` (problèmes de fermeture immédiate ou de prompt).
+       Puis avec `net use` pour mapper le partage avec mot de passe, puis ouverture de l’explorateur.
+       Finalement, version simple : ouverture directe de `\\<nom_machine>\C$` dans l’explorateur, laissant Windows gérer l’authentification.
 
 3. **Améliorations UX/UI**  
    - Recherche AD en temps réel (filtrage à chaque frappe dans la barre de recherche).
@@ -76,6 +74,7 @@ En résumé, tu as construit, étape par étape, un outil d’administration gra
 - **Session RDP** : Génère un fichier RDP personnalisé, le déplace dans `C:\temp\RDP`, puis ouvre la connexion Bureau à distance.
 - **Gestion de l’ordinateur** : Ouvre la MMC de gestion de l’ordinateur distant en mode administrateur.
 - **Connexion au disque C: (admin)** : Ouvre l’explorateur sur le partage C$ distant (`\\nom_machine\C$`).
+- **Suppression de profil utilisateur** : Permet de supprimer un profil utilisateur local sur la machine (avec élévation si nécessaire).
 - **Interface graphique moderne (WPF)** : Utilisation simple et intuitive, adaptée à l’administration quotidienne.
 
 ---

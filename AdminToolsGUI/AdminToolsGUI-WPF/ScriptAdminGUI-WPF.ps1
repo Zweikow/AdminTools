@@ -35,7 +35,7 @@ function Find-ADComputer {
 
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        Title="AdminTools - Connexion à distance (WPF)" Height="640" Width="420" WindowStartupLocation="CenterScreen">
+        Title="AdminTools - Connexion à distance (WPF)" Height="640" Width="420" WindowStartupLocation="CenterScreen" ResizeMode="NoResize">
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -181,4 +181,6 @@ $btnCShare.Add_Click({
     Start-Process explorer.exe $share
 })
 
-$window.ShowDialog() | Out-Null
+if (-not ($args -contains '-ProfileManager')) {
+    $window.ShowDialog() | Out-Null
+}
