@@ -116,21 +116,26 @@ En résumé, tu as construit, étape par étape, un outil d’administration gra
 
 ### Interface graphique (WPF)
 
-1. Ouvrir une console PowerShell en tant qu’administrateur
-2. Lancer le script GUI :
-   ```powershell
-   .\AdminToolsGUI\AdminToolsGUI-WPF\ScriptAdminGUI-WPF.ps1
-   ```
-3. Utiliser la barre de recherche pour trouver un poste (filtrage en temps réel)
-4. Sélectionner un poste et utiliser les boutons pour lancer les actions souhaitées
+- **Méthode recommandée** :
+  - Double-clique simplement sur le raccourci « AdminToolsGUI » créé automatiquement sur ton bureau par le script d’installation. L’application se lance sans fenêtre de terminal visible, avec l’icône personnalisée.
+  - Tu peux également épingler ce raccourci à la barre des tâches ou le déplacer où tu veux.
+
+- **Méthode alternative (manuelle)** :
+  1. Ouvre une console PowerShell en tant qu’administrateur
+  2. Lance le script GUI :
+     ```powershell
+     .\AdminToolsGUI\AdminToolsGUI-WPF\ScriptAdminGUI-WPF.ps1
+     ```
+  3. Utilise la barre de recherche pour trouver un poste (filtrage en temps réel)
+  4. Sélectionne un poste et utilise les boutons pour lancer les actions souhaitées
 
 ### Interface CLI
 
-1. Lancer le script CLI :
+1. Lance le script CLI :
    ```powershell
    .\AdminToolsCLI\ScriptAdminCLI.ps1
    ```
-2. Suivre les instructions dans le terminal
+2. Suis les instructions dans le terminal
 
 ---
 
