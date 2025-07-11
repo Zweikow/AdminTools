@@ -103,16 +103,12 @@ En résumé, tu as construit, étape par étape, un outil d’administration gra
    - Vérifier que WinRM est activé sur les postes distants
    - Installer Windows Terminal (Microsoft Store)
 
-3. **(Optionnel mais recommandé) Créer un raccourci pour lancer l’application sans terminal**
-   - Place le fichier `Lancer-AdminToolsGUI.vbs` fourni à la racine du projet cloné (le chemin est désormais dynamique, donc le dossier peut avoir n'importe quel nom).
-   - **Automatique :** Exécute le script `Create-AdminTools-Shortcut.ps1` situé dans `AdminToolsGUI/AdminToolsGUI-WPF/` pour créer automatiquement un raccourci sur ton bureau avec l’icône personnalisée (`Computer-Doctor.ico`).
+3. **Créer un raccourci pour lancer l’application sans terminal**
+   - Exécute simplement le script `Create-AdminTools-Shortcut.ps1` situé dans `AdminToolsGUI/AdminToolsGUI-WPF/` pour créer automatiquement un raccourci sur ton bureau avec l’icône personnalisée (`Computer-Doctor.ico`).
      ```powershell
      .\AdminToolsGUI\AdminToolsGUI-WPF\Create-AdminTools-Shortcut.ps1
      ```
-   - **Manuel :** (optionnel) Crée un raccourci vers ce fichier VBS (clic droit > Créer un raccourci).
-   - Clique droit sur le raccourci > **Propriétés** > **Changer d’icône...** et sélectionne ton fichier `.ico` personnalisé si besoin.
-   - Place le raccourci où tu veux (bureau, menu démarrer, etc.) et épingle-le à la barre des tâches si besoin.
-   - Double-clique sur le raccourci pour lancer l’application sans terminal en arrière-plan.
+   - Le raccourci ainsi créé permet de lancer l’application graphique sans fenêtre de terminal visible, avec le bon chemin dynamique et l’icône personnalisée. Tu peux ensuite l’épingler à la barre des tâches ou le déplacer où tu veux.
 
 ---
 
