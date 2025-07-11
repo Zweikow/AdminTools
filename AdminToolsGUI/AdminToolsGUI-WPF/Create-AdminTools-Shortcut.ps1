@@ -1,23 +1,23 @@
 # Crée un raccourci sur le bureau pour lancer l'application AdminToolsGUI-WPF
 
-# Chemin du script à lancer
-$scriptPath = "C:\dev\AdminTools\AdminToolsGUI\AdminToolsGUI-WPF\ScriptAdminGUI-WPF.ps1"
+# Chemin du bureau de l'utilisateur
+$desktop = [Environment]::GetFolderPath('Desktop')
 
-# Chemin de PowerShell 7 (adapte si besoin)
-$powershellExe = "C:\Program Files\PowerShell\7\pwsh.exe"
+# Chemin du script VBS à lancer
+$target = "$PSScriptRoot\..\..\Lancer-AdminToolsGUI.vbs"
 
-# Chemin du raccourci à créer (sur le bureau)
-$shortcutPath = [System.IO.Path]::Combine([Environment]::GetFolderPath("Desktop"), "AdminToolsGUI.lnk")
+# Chemin de l'icône
+$icon = "$PSScriptRoot\Computer-Doctor.ico"
 
-# Crée l'objet WScript.Shell
-$WshShell = New-Object -ComObject WScript.Shell
+# Chemin du raccourci à créer
+$shortcutPath = Join-Path $desktop "AdminTools.lnk"
 
-# Crée le raccourci
-$shortcut = $WshShell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = $powershellExe
-$shortcut.Arguments = "-NoExit -File `"$scriptPath`""
-$shortcut.WorkingDirectory = [System.IO.Path]::GetDirectoryName($scriptPath)
-$shortcut.IconLocation = "$powershellExe,0"
+# Création du raccourci
+$wsh = New-Object -ComObject WScript.Shell
+$shortcut = $wsh.CreateShortcut($shortcutPath)
+$shortcut.TargetPath = $target
+$shortcut.WorkingDirectory = Split-Path $target
+$shortcut.IconLocation = $icon
 $shortcut.Save()
 
 Write-Host "Raccourci créé sur le bureau : $shortcutPath"

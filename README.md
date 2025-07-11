@@ -105,8 +105,12 @@ En résumé, tu as construit, étape par étape, un outil d’administration gra
 
 3. **(Optionnel mais recommandé) Créer un raccourci pour lancer l’application sans terminal**
    - Place le fichier `Lancer-AdminToolsGUI.vbs` fourni à la racine du projet cloné (le chemin est désormais dynamique, donc le dossier peut avoir n'importe quel nom).
-   - Crée un raccourci vers ce fichier VBS (clic droit > Créer un raccourci).
-   - Clique droit sur le raccourci > **Propriétés** > **Changer d’icône...** et sélectionne ton fichier `.ico` personnalisé.
+   - **Automatique :** Exécute le script `Create-AdminTools-Shortcut.ps1` situé dans `AdminToolsGUI/AdminToolsGUI-WPF/` pour créer automatiquement un raccourci sur ton bureau avec l’icône personnalisée (`Computer-Doctor.ico`).
+     ```powershell
+     .\AdminToolsGUI\AdminToolsGUI-WPF\Create-AdminTools-Shortcut.ps1
+     ```
+   - **Manuel :** (optionnel) Crée un raccourci vers ce fichier VBS (clic droit > Créer un raccourci).
+   - Clique droit sur le raccourci > **Propriétés** > **Changer d’icône...** et sélectionne ton fichier `.ico` personnalisé si besoin.
    - Place le raccourci où tu veux (bureau, menu démarrer, etc.) et épingle-le à la barre des tâches si besoin.
    - Double-clique sur le raccourci pour lancer l’application sans terminal en arrière-plan.
 
