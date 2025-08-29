@@ -2,6 +2,18 @@ Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 
+# Auto-élévation UAC au démarrage (une seule invite)
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    $psExe = (Get-Command pwsh -ErrorAction SilentlyContinue).Source
+    if (-not $psExe) { $psExe = (Get-Command powershell.exe -ErrorAction SilentlyContinue).Source }
+    if ($psExe) {
+        Start-Process -FilePath $psExe -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$PSCommandPath`"") -Verb RunAs | Out-Null
+        exit
+    } else {
+        [System.Windows.MessageBox]::Show("Impossible de trouver PowerShell pour effectuer l'élévation.", "AdminTools", 'OK', 'Error') | Out-Null
+    }
+}
+
 function Find-ADComputer {
     param(
         [Parameter(Mandatory=$true)]
@@ -124,7 +136,7 @@ $btnPS.Add_Click({
         "-NoExit",
         "-Command",
         "Enter-PSSession -ComputerName $target"
-    ) -Verb RunAs
+    )
 })
 
 $btnMSRA.Add_Click({
@@ -178,7 +190,7 @@ $btnGestion.Add_Click({
     if (-not $selected) { return }
     $target = $selected.Nom
 
-    Start-Process compmgmt.msc -ArgumentList "/computer:\\$target" -Verb RunAs
+    Start-Process compmgmt.msc -ArgumentList "/computer:\\$target"
 })
 
 $btnCShare.Add_Click({
