@@ -35,7 +35,7 @@ function Find-ADComputer {
 
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        Title="AdminTools - Connexion à distance (WPF)" Height="640" Width="420" WindowStartupLocation="CenterScreen" ResizeMode="NoResize">
+        Title="AdminTools - Connexion à distance" Height="640" Width="420" WindowStartupLocation="CenterScreen">
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -66,7 +66,15 @@ function Find-ADComputer {
             <Button Name="btnGestion" Content="Gestion de l'ordinateur" Height="30" Margin="0,0,0,10"/>
             <Button Name="btnCShare" Content="Connexion au disque C: (admin)" Height="30" Margin="0,0,0,10"/>
         </StackPanel>
-        <Button Name="btnQuit" Content="Quitter" Height="30" Grid.Row="3" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,10"/>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,10">
+            <Button Name="btnUpdate" Height="30" Margin="0,0,10,0" ToolTip="Mettre à jour l'application">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE72C;" VerticalAlignment="Center"/>
+                    <TextBlock Text=" Mettre à jour" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button Name="btnQuit" Content="Quitter" Height="30"/>
+        </StackPanel>
     </Grid>
 </Window>
 "@
@@ -82,6 +90,7 @@ $btnMSRA = $window.FindName('btnMSRA')
 $btnRDP = $window.FindName('btnRDP')
 $btnGestion = $window.FindName('btnGestion')
 $btnCShare = $window.FindName('btnCShare')
+$btnUpdate = $window.FindName('btnUpdate')
 
 $btnQuit.Add_Click({ $window.Close() })
 
@@ -177,10 +186,106 @@ $btnCShare.Add_Click({
     if (-not $selected) { return }
     $target = $selected.Nom
 
-    $share = "\\$target\C$"
+    $share = "\\\\$target\C`$"
     Start-Process explorer.exe $share
 })
 
-if (-not ($args -contains '-ProfileManager')) {
-    $window.ShowDialog() | Out-Null
-}
+$btnUpdate.Add_Click({
+    # Désactive le bouton et affiche un curseur d'attente
+    $btnUpdate.IsEnabled = $false
+    [System.Windows.Input.Mouse]::OverrideCursor = [System.Windows.Input.Cursors]::Wait
+
+    try {
+        # Détermine la racine du dépôt (deux niveaux au-dessus du dossier du script)
+        $repoRoot = (Split-Path $PSScriptRoot -Parent | Split-Path -Parent)
+        $gitDir = Join-Path $repoRoot '.git'
+        if (-not (Test-Path $gitDir)) {
+            [System.Windows.MessageBox]::Show("Dépôt Git introuvable au chemin : $repoRoot", "Mise à jour", 'OK', 'Error') | Out-Null
+            return
+        }
+
+        # Vérifie la disponibilité de git
+        $gitCmd = (Get-Command git -ErrorAction SilentlyContinue)
+        if (-not $gitCmd) {
+            [System.Windows.MessageBox]::Show("L'outil 'git' n'est pas disponible dans le PATH.", "Mise à jour", 'OK', 'Error') | Out-Null
+            return
+        }
+
+        $ok = $true
+        $errors = @()
+        $didStash = $false
+
+        # Si l'arbre de travail contient des modifications locales, proposer un stash temporaire
+        $dirty = (& git -C $repoRoot status --porcelain 2>$null)
+        if ($dirty) {
+            $choice = [System.Windows.MessageBox]::Show(
+                "Des modifications locales non commit ont été détectées. Voulez-vous les mettre de côté (stash) temporairement pour effectuer la mise à jour ?",
+                "Mise à jour", 'YesNo', 'Question'
+            )
+            if ($choice -ne 'Yes') {
+                return
+            }
+            & git -C $repoRoot stash push -u -m "auto-stash AdminTools updater $(Get-Date -Format yyyy-MM-dd-HH-mm-ss)" 2>&1 | ForEach-Object { $errors += $_ }
+            if ($LASTEXITCODE -ne 0) {
+                $ok = $false
+            } else {
+                $didStash = $true
+            }
+        }
+
+        # Récupère les dernières modifications
+        if ($ok) {
+            & git -C $repoRoot fetch --all --tags 2>&1 | ForEach-Object { $errors += $_ }
+            if ($LASTEXITCODE -ne 0) { $ok = $false }
+        }
+
+        if ($ok) {
+            & git -C $repoRoot pull --ff-only 2>&1 | ForEach-Object { $errors += $_ }
+            if ($LASTEXITCODE -ne 0) { $ok = $false }
+        }
+
+        # Si nous avions stashé, tenter un pop après mise à jour
+        $popInfo = $null
+        if ($ok -and $didStash) {
+            $popOut = & git -C $repoRoot stash pop 2>&1
+            $errors += $popOut
+            $popInfo = ($popOut -join "`n")
+        }
+
+        if (-not $ok) {
+            $msg = "La mise à jour a échoué. Détails :`n" + ($errors -join "`n")
+            [System.Windows.MessageBox]::Show($msg, "Mise à jour", 'OK', 'Error') | Out-Null
+            return
+        }
+
+        $successMsg = "Mise à jour terminée avec succès."
+        if ($didStash) {
+            if ($popInfo -and ($popInfo -match 'CONFLICT' -or $popInfo -match 'Merge conflict')) {
+                $successMsg += "`nAttention : des conflits sont survenus lors du 'stash pop'. Résolvez-les manuellement."
+            } elseif ($popInfo) {
+                $successMsg += "`nVos modifications locales ont été restaurées (stash pop)."
+            }
+        }
+
+        $res = [System.Windows.MessageBox]::Show($successMsg + "`nRedémarrer l'application maintenant ?", "Mise à jour", 'YesNo', 'Information')
+        if ($res -eq 'Yes') {
+            # Détermine l'exécutable PowerShell disponible (pwsh de préférence)
+            $psExe = (Get-Command pwsh -ErrorAction SilentlyContinue).Source
+            if (-not $psExe) { $psExe = (Get-Command powershell.exe -ErrorAction SilentlyContinue).Source }
+            if ($psExe) {
+                Start-Process -FilePath $psExe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"") | Out-Null
+                $window.Close()
+            } else {
+                [System.Windows.MessageBox]::Show("Impossible de trouver PowerShell pour relancer l'application.", "Mise à jour", 'OK', 'Warning') | Out-Null
+            }
+        }
+    } catch {
+        [System.Windows.MessageBox]::Show("Erreur inattendue : $_", "Mise à jour", 'OK', 'Error') | Out-Null
+    } finally {
+        # Restaure l'UI
+        [System.Windows.Input.Mouse]::OverrideCursor = $null
+        $btnUpdate.IsEnabled = $true
+    }
+})
+
+$window.ShowDialog() | Out-Null
