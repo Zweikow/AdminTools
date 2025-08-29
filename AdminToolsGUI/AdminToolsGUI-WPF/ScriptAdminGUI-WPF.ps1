@@ -120,7 +120,7 @@ $txtHost.Add_KeyUp({
 })
 
 $txtHost.Add_KeyDown({
-    param($sender, $e)
+    param($src, $e)
     if ($e.Key -eq 'Enter') {
         $btnPS.RaiseEvent([Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
     }
@@ -198,8 +198,10 @@ $btnCShare.Add_Click({
     if (-not $selected) { return }
     $target = $selected.Nom
 
-    $share = "\\\\$target\C`$"
-    Start-Process explorer.exe $share
+    $share = "\\\\$target\\C$"
+
+    # Ouvre via cmd/start avec élévation explicite (UAC)
+    Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c','start','', $share) -Verb RunAs
 })
 
 $btnUpdate.Add_Click({
