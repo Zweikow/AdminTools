@@ -1,3 +1,9 @@
+# Vérifie si le script est lancé en admin, sinon relance en admin
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+    exit
+}
+
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
@@ -32,6 +38,9 @@ function Find-ADComputer {
         return @()
     }
 }
+
+# --- Fenêtre d'authentification WPF ---
+# (SUPPRIMÉ : plus de fenêtre d'authentification ni de credential global)
 
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -148,7 +157,7 @@ $btnRDP.Add_Click({
     # Chemin du fichier final
     $finalRdp = "$destDir\\RDP-$user-$now.rdp"
 
-    # Génère le fichier RDP de base (pas de ligne vide au début, retours à la ligne Windows)
+    # Génère le fichier RDP de base
     $rdpContent = "full address:s:$target`r`nusername:s:$user`r`n"
     Set-Content -Path $tempRdp -Value $rdpContent -Encoding ASCII
 
@@ -178,7 +187,7 @@ $btnCShare.Add_Click({
     $target = $selected.Nom
 
     $share = "\\$target\C$"
-    Start-Process explorer.exe $share
+    Start-Process explorer.exe $share -Verb RunAs
 })
 
 if (-not ($args -contains '-ProfileManager')) {
