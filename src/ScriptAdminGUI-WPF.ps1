@@ -10,10 +10,16 @@ Add-Type -AssemblyName WindowsBase
 
 # Chemin du dépôt Git (où se trouve le projet)
 # Détecte automatiquement le chemin du repo en remontant depuis le script
-$global:RepoPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+$global:RepoPath = Split-Path $PSScriptRoot -Parent
 if (-not (Test-Path "$global:RepoPath\.git")) {
-    # Fallback vers C:\tools si pas de .git trouvé
-    $global:RepoPath = "C:\tools"
+    # Fallback : chercher .git dans les dossiers parents
+    $parent = Split-Path $global:RepoPath -Parent
+    if (Test-Path "$parent\.git") {
+        $global:RepoPath = $parent
+    } else {
+        # Dernier fallback vers C:\tools
+        $global:RepoPath = "C:\tools"
+    }
 }
 
 function Get-CurrentVersion {
