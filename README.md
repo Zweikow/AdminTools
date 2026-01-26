@@ -2,90 +2,29 @@
 
 ## Présentation
 
-**AdminTools** est un outil d’administration pour Windows permettant de faciliter la gestion à distance des postes de travail dans un environnement Active Directory. Il propose une interface graphique moderne (WPF) et une interface en ligne de commande (CLI).
-
----
-
-## Résumé du développement
-
-1. **Départ du projet**  
-   - Tu travailles sur un outil d’administration Windows (AdminTools) avec une interface graphique WPF en PowerShell.
-   - Tu as déjà intégré la recherche Active Directory (AD) et souhaites ajouter les autres fonctionnalités une à une.
-
-2. **Ajout des fonctionnalités principales**  
-   - **Session PowerShell distante** :  
-     Intégrée via un bouton qui ouvre une session distante avec `Enter-PSSession` dans Windows Terminal (`wt.exe`), avec ou sans demande d’identifiants selon le contexte.
-   - **Assistance à distance (MSRA)** :  
-     Ajout d’un bouton qui lance `msra.exe /offerra <nom_machine>` pour l’assistance à distance.
-   - **Session RDP** :  
-     Génération d’un fichier `.rdp` dans `%TEMP%`, déplacement dans `C:\temp\RDP`, renommage dynamique, puis ouverture avec `mstsc.exe`.
-     Correction du nom de fichier pour éviter les caractères interdits.
-   - **Gestion de l’ordinateur** :  
-     Bouton qui lance `compmgmt.msc /computer:\<nom_machine>` en mode administrateur.
-   - **Connexion au partage C$ (admin)** :  
-     Plusieurs essais :  
-       D’abord avec `runas` (problèmes de fermeture immédiate ou de prompt).
-       Puis avec `net use` pour mapper le partage avec mot de passe, puis ouverture de l’explorateur.
-       Finalement, version simple : ouverture directe de `\\<nom_machine>\C$` dans l’explorateur, laissant Windows gérer l’authentification.
-
-3. **Améliorations UX/UI**  
-   - Recherche AD en temps réel (filtrage à chaque frappe dans la barre de recherche).
-   - Suppression du bouton « Recherche » devenu inutile.
-   - Positionnement du bouton « Quitter » en bas à droite, suppression des doublons.
-   - Correction des erreurs de XAML (noms de boutons dupliqués).
-
-4. **Gestion du compte admin par défaut**  
-   - Intégration d’une fenêtre « Réglages » pour saisir et stocker (chiffré) le compte admin par défaut dans `%APPDATA%`.
-   - Utilisation automatique de ce compte pour les actions distantes (PowerShell, MSG, etc.).
-   - Finalement, suppression de cette fonctionnalité pour revenir à une gestion plus simple et universelle.
-
-5. **Compatibilité multi-utilisateurs**  
-   - Explication que chaque technicien peut configurer son propre compte admin (quand la fonctionnalité était présente), stockage sécurisé par profil Windows.
-
-6. **Documentation et diffusion**  
-   - Création et mise à jour d’un README.md détaillé :  
-     - Présentation, fonctionnalités, prérequis, installation, utilisation, limitations, auteurs, licence.
-     - Ajout d’une section sur la création d’un raccourci VBS pour lancer l’application sans terminal, avec icône personnalisée, et épinglable à la barre des tâches.
-   - Explications étape par étape pour l’installation complète, la personnalisation du raccourci, et l’épinglage à la barre des tâches.
-
-7. **Gestion des erreurs et conseils**  
-   - Aide sur les erreurs PowerShell/VSCode (problèmes de pipe, redémarrage de l’extension).
-   - Correction d’un bug lors du chargement du mot de passe admin (fichier vide ou corrompu).
-   - Conseils sur les limitations de Windows concernant `runas` et l’ouverture d’explorateur avec un autre compte.
-
-8. **Gestion de versions et releases**  
-   - Instructions pour créer un tag Git (`v1.0.1`), pousser les modifications, et générer une release note détaillée.
-
-9. **Personnalisation de l’icône**  
-   - Explications pour utiliser un fichier `.ico` personnalisé pour le raccourci VBS.
-
-10. **Résultat final**  
-    - Application AdminTools avec interface graphique WPF, boutons pour toutes les actions d’administration courantes, recherche AD en temps réel, et lancement via un raccourci VBS personnalisé sans terminal.
-
-En résumé, tu as construit, étape par étape, un outil d’administration graphique moderne, ergonomique, documenté, et prêt à être partagé et utilisé par toute ton équipe, avec une expérience utilisateur professionnelle.
+**AdminTools** est un outil d'administration pour Windows permettant de faciliter la gestion à distance des postes de travail dans un environnement Active Directory. Il propose une interface graphique moderne (WPF) pour simplifier les tâches d'administration quotidiennes.
 
 ---
 
 ## Fonctionnalités principales
 
-- **Recherche Active Directory** : Trouver rapidement un ordinateur par nom, IP ou description (filtrage en temps réel).
-- **Session PowerShell distante** : Ouvre une session PowerShell sur le poste sélectionné (via Windows Terminal, avec élévation UAC).
-- **Assistance à distance (MSRA)** : Lance l’outil d’assistance à distance Microsoft pour aider un utilisateur.
-- **Session RDP** : Génère un fichier RDP personnalisé, le déplace dans `C:\temp\RDP`, puis ouvre la connexion Bureau à distance.
-- **Gestion de l’ordinateur** : Ouvre la MMC de gestion de l’ordinateur distant en mode administrateur.
-- **Connexion au disque C: (admin)** : Ouvre l’explorateur sur le partage C$ distant (`\\nom_machine\C$`).
-- **Suppression de profil utilisateur** : Permet de supprimer un profil utilisateur local sur la machine (avec élévation si nécessaire).
-- **Interface graphique moderne (WPF)** : Utilisation simple et intuitive, adaptée à l’administration quotidienne.
+- **Recherche Active Directory** : Trouver rapidement un ordinateur par nom, IP ou description (filtrage en temps réel)
+- **Session PowerShell distante** : Ouvre une session PowerShell sur le poste sélectionné (via Windows Terminal, avec élévation UAC)
+- **Assistance à distance (MSRA)** : Lance l'outil d'assistance à distance Microsoft pour aider un utilisateur
+- **Session RDP** : Génère un fichier RDP personnalisé, le déplace dans `C:\temp\RDP`, puis ouvre la connexion Bureau à distance
+- **Gestion de l'ordinateur** : Ouvre la MMC de gestion de l'ordinateur distant en mode administrateur
+- **Connexion au disque C: (admin)** : Ouvre l'explorateur sur le partage C$ distant (`\\nom_machine\C$`)
+- **Interface graphique moderne (WPF)** : Utilisation simple et intuitive, adaptée à l'administration quotidienne
 
 ---
 
 ## Prérequis
 
 - Windows 10/11
-- PowerShell 7 (pwsh.exe) ([Télécharger PowerShell 7.5.2 sur GitHub](https://github.com/PowerShell/PowerShell/releases/tag/v7.5.2))
+- PowerShell 7 (pwsh.exe) - sera installé automatiquement par le script si absent
 - Module PowerShell ActiveDirectory (RSAT)
 - Accès administrateur sur les postes distants pour certaines fonctions
-- Droit d’exécution à distance (WinRM activé pour PowerShell distant)
+- Droit d'exécution à distance (WinRM activé pour PowerShell distant)
 - Microsoft Remote Assistance (MSRA) installé
 - Windows Terminal (`wt.exe`) pour la session PowerShell moderne
 
@@ -93,64 +32,117 @@ En résumé, tu as construit, étape par étape, un outil d’administration gra
 
 ## Installation
 
-1. **Cloner le dépôt**
-   ```sh
-   git clone https://github.com/Zweikow/AdminTools.git
-   ```
-2. **Installer les prérequis**
-   - Activer les outils d’administration RSAT (Active Directory)
-   - Vérifier que WinRM est activé sur les postes distants
-   - Installer Windows Terminal (Microsoft Store)
+### Installation automatique (recommandée)
 
-3. **Créer un raccourci pour lancer l’application sans terminal**
-   - Exécute simplement le script `Create-AdminTools-Shortcut.ps1` situé dans `AdminToolsGUI/AdminToolsGUI-WPF/` pour créer automatiquement un raccourci sur ton bureau avec l’icône personnalisée (`Computer-Doctor.ico`).
+1. **Cloner le dépôt dans `C:\tools`**
+   ```powershell
+   # Créer le dossier si nécessaire
+   New-Item -Path "C:\tools" -ItemType Directory -Force
+   
+   # Cloner le projet
+   cd C:\tools
+   git clone https://github.com/Zweikow/AdminTools.git .
+   ```
+
+2. **Lancer le script d'installation**
+   
+   Exécutez le script `Install-Configure-AdminTools-Shortcut.ps1` **en tant qu'administrateur** :
+   ```powershell
+   # Clic droit → "Exécuter avec PowerShell" en tant qu'administrateur
+   C:\tools\Install-Configure-AdminTools-Shortcut.ps1
+   ```
+   
+   Ce script effectue automatiquement :
+   - ✅ Vérification et installation de PowerShell 7 (si absent)
+   - ✅ Configuration de PowerShell 7 comme version par défaut
+   - ✅ Création du raccourci sur le bureau avec icône personnalisée
+   
+   Une fois terminé, un raccourci **AdminTools** apparaît sur votre bureau !
+
+3. **Installer les prérequis Windows**
+   - Activer les outils d'administration RSAT (Active Directory) :
      ```powershell
-     .\AdminToolsGUI\AdminToolsGUI-WPF\Create-AdminTools-Shortcut.ps1
+     Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0
      ```
-   - Le raccourci ainsi créé permet de lancer l’application graphique sans fenêtre de terminal visible, avec le bon chemin dynamique et l’icône personnalisée. Tu peux ensuite l’épingler à la barre des tâches ou le déplacer où tu veux.
+   - Vérifier que WinRM est activé sur les postes distants :
+     ```powershell
+     Enable-PSRemoting -Force
+     ```
+   - Installer Windows Terminal (Microsoft Store) - normalement déjà présent sur Windows 11
+
+4. **Utiliser l'application**
+   - Double-cliquez sur le raccourci **AdminTools** créé sur le bureau
+   - Optionnel : Clic droit sur le raccourci → "Épingler à la barre des tâches"
+
+### Installation manuelle
+
+Si vous préférez une installation manuelle :
+
+1. Installez PowerShell 7 : [Télécharger PowerShell 7](https://aka.ms/powershell-release?tag=stable)
+2. Clonez le dépôt dans `C:\tools`
+3. Créez manuellement un raccourci pointant vers `C:\tools\src\Lancer-AdminToolsGUI.vbs`
 
 ---
 
 ## Utilisation
 
-### Interface graphique (WPF)
+### Méthode recommandée (Interface graphique WPF)
 
-- **Méthode recommandée** :
-  - Double-clique simplement sur le raccourci « AdminToolsGUI » créé automatiquement sur ton bureau par le script d’installation. L’application se lance sans fenêtre de terminal visible, avec l’icône personnalisée.
-  - Tu peux également épingler ce raccourci à la barre des tâches ou le déplacer où tu veux.
+1. **Double-cliquez sur le raccourci "AdminTools"** créé sur votre bureau
+   - L'application se lance automatiquement sans fenêtre de terminal visible
+   - L'interface graphique s'ouvre avec l'icône personnalisée
+
+2. **Rechercher un ordinateur**
+   - Tapez dans la barre de recherche : nom d'ordinateur, IP ou description
+   - Les résultats s'affichent en temps réel dans le tableau
+
+3. **Sélectionner et agir**
+   - Cliquez sur un ordinateur dans le tableau
+   - Utilisez les boutons pour lancer les actions souhaitées :
+     - Session PowerShell distante
+     - Assistance à distance (MSRA)
+     - Connexion RDP
+     - Gestion de l'ordinateur
+     - Accès au disque C$ (admin)
 
 ### Méthode alternative (manuelle)
 
-1. Ouvre une console PowerShell en tant qu’administrateur
-2. Lance le script GUI :
-   ```powershell
-   .\AdminToolsGUI\AdminToolsGUI-WPF\ScriptAdminGUI-WPF.ps1
-   ```
-3. Utilise la barre de recherche pour trouver un poste (filtrage en temps réel)
-4. Sélectionne un poste et utilise les boutons pour lancer les actions souhaitées
+Si vous n'avez pas utilisé le script d'installation :
 
-### Interface CLI
-
-1. Lance le script CLI :
+1. Ouvrez une console PowerShell 7 en tant qu'administrateur
+2. Lancez directement le script principal :
    ```powershell
-   .\AdminToolsCLI\ScriptAdminCLI.ps1
+   C:\tools\src\ScriptAdminGUI-WPF.ps1
    ```
-2. Suis les instructions dans le terminal
+
+---
+
+## Structure du projet
+
+```
+C:\tools\AdminTools\
+├── README.md                                    # Documentation
+├── Install-Configure-AdminTools-Shortcut.ps1    # Script d'installation
+└── src/
+    ├── Lancer-AdminToolsGUI.vbs                 # Lanceur VBS (sans terminal)
+    ├── ScriptAdminGUI-WPF.ps1                   # Application principale
+    └── Computer-Doctor.ico                      # Icône du raccourci
+```
 
 ---
 
 ## Limitations & Conseils
 
-- Certaines fonctions nécessitent des droits administrateur sur la machine distante.
-- Pour la session PowerShell distante, WinRM doit être activé sur la cible.
-- Le partage C$ doit être accessible et l’utilisateur doit avoir les droits nécessaires.
-- L’authentification sur le partage C$ se fait via la fenêtre Windows standard si besoin.
+- Certaines fonctions nécessitent des droits administrateur sur la machine distante
+- Pour la session PowerShell distante, WinRM doit être activé sur la cible
+- Le partage C$ doit être accessible et l'utilisateur doit avoir les droits nécessaires
+- L'authentification sur le partage C$ se fait via la fenêtre Windows standard si besoin
 
 ---
 
 ## Auteurs
 
-- Projet développé par [Zweikow](https://github.com/Zweikow) et contributeurs.
+- Projet développé par [Zweikow](https://github.com/Zweikow) et contributeurs
 
 ---
 
