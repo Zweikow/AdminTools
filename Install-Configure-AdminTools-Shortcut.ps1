@@ -5,7 +5,19 @@
 # 2. Definit PowerShell 7 comme version par defaut
 # 3. Cree un raccourci sur le bureau
 
+# Fichier de log
+$logFile = "$env:TEMP\AdminTools-Install.log"
+function Write-Log {
+    param([string]$Message)
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    "$timestamp - $Message" | Out-File -FilePath $logFile -Append -Encoding UTF8
+    Write-Host $Message
+}
+
+Write-Log "=== Installation et Configuration d'AdminTools ==="
 Write-Host "=== Installation et Configuration d'AdminTools ===" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Log: $logFile" -ForegroundColor Gray
 Write-Host ""
 
 # ===== ETAPE 1 : Verifier et installer PowerShell 7 =====
@@ -66,30 +78,45 @@ Write-Host "[3/3] Creation du raccourci sur le bureau..." -ForegroundColor Yello
 # Detection automatique du dossier d'installation
 $installPath = $PSScriptRoot
 Write-Host "  Dossier d'installation detecte : $installPath" -ForegroundColor Gray
+Write-Log "Dossier installation: $installPath"
 
 $desktop = [Environment]::GetFolderPath('Desktop')
 $target = Join-Path $installPath "src\Lancer-AdminToolsGUI.vbs"
 $icon = Join-Path $installPath "src\Computer-Doctor.ico"
 $shortcutPath = Join-Path $desktop "AdminTools.lnk"
 
+Write-Host "  Bureau: $desktop" -ForegroundColor Gray
 Write-Host "  Fichier cible : $target" -ForegroundColor Gray
 Write-Host "  Icone : $icon" -ForegroundColor Gray
+Write-Host "  Raccourci : $shortcutPath" -ForegroundColor Gray
+
+Write-Log "Bureau: $desktop"
+Write-Log "Target: $target"
+Write-Log "Icon: $icon"
+Write-Log "Shortcut: $shortcutPath"
 
 # Verification que les fichiers source existent
 if (-not (Test-Path $target)) {
     Write-Host "[X] Erreur : Le fichier $target n'existe pas" -ForegroundColor Red
     Write-Host "  Assurez-vous que AdminTools est correctement installe" -ForegroundColor Yellow
+    Write-Log "ERREUR: Fichier target inexistant"
     Read-Host "Appuyez sur Entree pour quitter"
     exit 1
 }
 
+Write-Log "Fichier target existe: OK"
+
 if (-not (Test-Path $icon)) {
     Write-Host "[!] Avertissement : L'icone $icon n'existe pas" -ForegroundColor Yellow
+    Write-Log "WARN: Icone inexistante"
     $icon = $null
+} else {
+    Write-Log "Fichier icone existe: OK"
 }
 
 # Creation du raccourci
 try {
+    Write-Log "Debut creation raccourci..."
     $wsh = New-Object -ComObject WScript.Shell
     $shortcut = $wsh.CreateShortcut($shortcutPath)
     $shortcut.TargetPath = $target
@@ -98,10 +125,19 @@ try {
         $shortcut.IconLocation = $icon
     }
     $shortcut.Save()
+    Write-Log "Raccourci Save() appele"
     
-    Write-Host "[OK] Raccourci cree : $shortcutPath" -ForegroundColor Green
+    # Verification
+    if (Test-Path $shortcutPath) {
+        Write-Host "[OK] Raccourci cree : $shortcutPath" -ForegroundColor Green
+        Write-Log "SUCCESS: Raccourci cree avec succes"
+    } else {
+        Write-Host "[X] Le raccourci n'a pas ete cree" -ForegroundColor Red
+        Write-Log "ERREUR: Raccourci non trouve apres Save()"
+    }
 } catch {
     Write-Host "[X] Erreur lors de la creation du raccourci : $_" -ForegroundColor Red
+    Write-Log "ERREUR: Exception - $_"
     Read-Host "Appuyez sur Entree pour quitter"
     exit 1
 }
