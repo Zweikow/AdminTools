@@ -386,9 +386,6 @@ $btnCShare.Add_Click({
 })
 
 if (-not ($args -contains '-ProfileManager')) {
-    # Afficher la fenêtre
-    $null = $window.Show()
-    
     # Vérification discrète des mises à jour au démarrage (en arrière-plan)
     $window.Dispatcher.InvokeAsync({
         Start-Sleep -Seconds 2  # Attendre que l'interface soit chargée
@@ -408,6 +405,6 @@ if (-not ($args -contains '-ProfileManager')) {
         }
     }.GetNewClosure()) | Out-Null
     
-    # Attendre la fermeture de la fenêtre
+    # Afficher la fenêtre en mode modal
     $window.ShowDialog() | Out-Null
 }
