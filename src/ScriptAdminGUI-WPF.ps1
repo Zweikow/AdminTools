@@ -18,265 +18,424 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
+Add-Type -AssemblyName Microsoft.VisualBasic
 
-# Chemin du dépôt Git (où se trouve le projet)
-# Détecte automatiquement le chemin du repo en remontant depuis le script
+# --- DÉFINITION DES TYPES ---
+if (-not ("AdminTools.ComputerItem" -as [type])) {
+    Add-Type -TypeDefinition @"
+    using System;
+    using System.ComponentModel;
+    namespace AdminTools {
+        public class ComputerItem : INotifyPropertyChanged {
+            public event PropertyChangedEventHandler PropertyChanged;
+            private string _nom; public string Nom { get { return _nom; } set { _nom = value; OnPropertyChanged("Nom"); } }
+            private string _ip; public string IP { get { return _ip; } set { _ip = value; OnPropertyChanged("IP"); } }
+            private string _os; public string OS { get { return _os; } set { _os = value; OnPropertyChanged("OS"); } }
+            private string _description; public string Description { get { return _description; } set { _description = value; OnPropertyChanged("Description"); } }
+            private string _statusColor = "#4CAF50"; public string StatusColor { get { return _statusColor; } set { _statusColor = value; OnPropertyChanged("StatusColor"); } }
+            protected void OnPropertyChanged(string name) {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+            }
+        }
+    }
+"@
+}
+
+# --- VARIABLES GLOBALES ET CHEMINS ---
 $global:RepoPath = Split-Path $PSScriptRoot -Parent
 if (-not (Test-Path "$global:RepoPath\.git")) {
-    # Fallback : chercher .git dans les dossiers parents
     $parent = Split-Path $global:RepoPath -Parent
-    if (Test-Path "$parent\.git") {
-        $global:RepoPath = $parent
-    } else {
-        # Dernier fallback vers C:\tools
-        $global:RepoPath = "C:\tools"
+    if (Test-Path "$parent\.git") { $global:RepoPath = $parent } else { $global:RepoPath = "C:\tools" }
+}
+
+$global:ConfigDir = "C:\tools\AdminTools"
+if (-not (Test-Path $global:ConfigDir)) { New-Item -Path $global:ConfigDir -ItemType Directory -Force | Out-Null }
+$global:HistoryFile = "$global:ConfigDir\history.json"
+$global:SettingsFile = "$global:ConfigDir\settings.json"
+$global:RepoUrl = "https://raw.githubusercontent.com/Zweikow/AdminTools/main"
+
+# --- FONCTIONS DE PARAMÈTRES ---
+function Get-Settings {
+    if (Test-Path $global:SettingsFile) {
+        try { return (Get-Content $global:SettingsFile -Raw | ConvertFrom-Json) } catch {}
+    }
+    return [PSCustomObject]@{ Theme = "Dark"; SearchBase = "" }
+}
+
+function Save-Settings {
+    param($Settings)
+    $Settings | ConvertTo-Json | Set-Content $global:SettingsFile
+}
+
+# --- FONCTIONS D'HISTORIQUE ---
+function Get-History {
+    if (Test-Path $global:HistoryFile) {
+        try { return @(Get-Content $global:HistoryFile -Raw | ConvertFrom-Json) } catch { return @() }
+    }
+    return @()
+}
+
+function Add-ToHistory {
+    param([string]$ComputerName)
+    $history = Get-History
+    $history = @($history | Where-Object { $_ -ne $ComputerName })
+    $history = @($ComputerName) + $history
+    if ($history.Count -gt 7) { $history = $history[0..6] }
+    $history | ConvertTo-Json | Set-Content $global:HistoryFile
+    Update-HistoryUI
+}
+
+function Update-HistoryUI {
+    $pnlRecentConnections.Children.Clear()
+    $history = Get-History
+    foreach ($comp in $history) {
+        $btn = New-Object System.Windows.Controls.Button
+        $btn.Content = "🖥  $comp"
+        $btn.Style = $window.FindResource("ModernButton")
+        $btn.Background = [System.Windows.Media.Brushes]::Transparent
+        $btn.BorderThickness = 0
+        $btn.Margin = "0,0,0,2"
+        $btn.Add_Click({
+            $txtHost.Text = $comp
+            $txtHost.RaiseEvent([System.Windows.Input.KeyEventArgs]::new(
+                [System.Windows.Input.Keyboard]::PrimaryDevice,
+                [System.Windows.PresentationSource]::FromVisual($txtHost),
+                0,
+                [System.Windows.Input.Key]::Enter
+            ))
+        }.GetNewClosure())
+        $pnlRecentConnections.Children.Add($btn) | Out-Null
     }
 }
 
-function Get-CurrentVersion {
+# --- FONCTIONS DE MISE À JOUR ---
+function Get-RemoteVersion {
     try {
-        $gitPath = Get-Command git -ErrorAction SilentlyContinue
-        if (-not $gitPath) { return "Version inconnue (Git non installé)" }
-        
-        Push-Location $global:RepoPath
-        $branch = git rev-parse --abbrev-ref HEAD 2>$null
-        $commitShort = git rev-parse --short HEAD 2>$null
-        $commitDate = git log -1 --format=%cd --date=short 2>$null
-        Pop-Location
-        
-        if ($commitShort) {
-            return "v1.0 - $branch@$commitShort ($commitDate)"
-        }
-        return "Version locale"
-    } catch {
-        return "Version inconnue"
-    }
+        $versionStr = Invoke-RestMethod -Uri "$global:RepoUrl/version.txt" -UseBasicParsing -ErrorAction Stop
+        return $versionStr.Trim()
+    } catch { return $null }
+}
+
+function Get-LocalVersion {
+    $versionFile = "$global:RepoPath\version.txt"
+    if (Test-Path $versionFile) { return (Get-Content $versionFile).Trim() }
+    return "1.0.0"
 }
 
 function Test-UpdateAvailable {
-    try {
-        $gitPath = Get-Command git -ErrorAction SilentlyContinue
-        if (-not $gitPath) { return $false }
-        
-        Push-Location $global:RepoPath
-        
-        # Fetch les dernières modifications
-        git fetch origin 2>&1 | Out-Null
-        
-        # Compare local vs remote
-        $localCommit = git rev-parse HEAD 2>$null
-        $remoteCommit = git rev-parse '@{u}' 2>$null
-        
-        Pop-Location
-        
-        return ($localCommit -ne $remoteCommit)
-    } catch {
-        Pop-Location
-        return $false
-    }
-}
-
-function Get-UpdateChangelog {
-    try {
-        Push-Location $global:RepoPath
-        
-        # Récupère les commits entre local et remote
-        $commits = git log HEAD..@{u} --pretty=format:"• %s (%an - %ar)" --max-count=10 2>$null
-        
-        Pop-Location
-        
-        if ($commits) {
-            return $commits -join "`n"
-        }
-        return "Aucun détail disponible"
-    } catch {
-        Pop-Location
-        return "Impossible de récupérer les changements"
-    }
+    $remote = Get-RemoteVersion
+    $local = Get-LocalVersion
+    return ($remote -and $remote -ne $local)
 }
 
 function Invoke-AutoUpdate {
     param([System.Windows.Window]$ParentWindow)
-    
     try {
-        # Vérifier que Git est installé
-        $gitPath = Get-Command git -ErrorAction SilentlyContinue
-        if (-not $gitPath) {
-            [System.Windows.MessageBox]::Show(
-                "Git n'est pas installé sur ce système.`n`nInstallez Git depuis : https://git-scm.com/",
-                "Mise à jour impossible",
-                [System.Windows.MessageBoxButton]::OK,
-                [System.Windows.MessageBoxImage]::Error
-            )
+        $remoteVersion = Get-RemoteVersion
+        if (-not $remoteVersion) {
+            [System.Windows.MessageBox]::Show("Impossible de vérifier la version en ligne.", "Erreur", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
             return
         }
-        
-        # Vérifier que le dossier est un repo Git
-        if (-not (Test-Path "$global:RepoPath\.git")) {
-            [System.Windows.MessageBox]::Show(
-                "Le dossier $global:RepoPath n'est pas un dépôt Git valide.",
-                "Mise à jour impossible",
-                [System.Windows.MessageBoxButton]::OK,
-                [System.Windows.MessageBoxImage]::Error
-            )
+        $localVersion = Get-LocalVersion
+        if ($remoteVersion -eq $localVersion) {
+            [System.Windows.MessageBox]::Show("Vous utilisez déjà la dernière version ($localVersion).", "À jour", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information)
             return
         }
+        $result = [System.Windows.MessageBox]::Show("Une nouvelle version ($remoteVersion) est disponible. Voulez-vous mettre à jour ?", "Mise à jour", [System.Windows.MessageBoxButton]::YesNo, [System.Windows.MessageBoxImage]::Question)
+        if ($result -ne [System.Windows.MessageBoxResult]::Yes) { return }
         
-        # Vérifier les mises à jour disponibles
-        if (-not (Test-UpdateAvailable)) {
-            [System.Windows.MessageBox]::Show(
-                "Vous utilisez déjà la dernière version d'AdminTools !",
-                "Aucune mise à jour",
-                [System.Windows.MessageBoxButton]::OK,
-                [System.Windows.MessageBoxImage]::Information
-            )
-            return
-        }
+        $newScriptUrl = "$global:RepoUrl/src/ScriptAdminGUI-WPF.ps1"
+        $tempScript = "$env:TEMP\ScriptAdminGUI-WPF_new.ps1"
+        Invoke-WebRequest -Uri $newScriptUrl -OutFile $tempScript -UseBasicParsing
         
-        # Récupérer le changelog
-        $changelog = Get-UpdateChangelog
+        $tempVersion = "$env:TEMP\version.txt"
+        Invoke-WebRequest -Uri "$global:RepoUrl/version.txt" -OutFile $tempVersion -UseBasicParsing
         
-        # Demander confirmation
-        $message = "Une mise à jour est disponible !`n`n"
-        $message += "Nouveautés :`n$changelog`n`n"
-        $message += "Voulez-vous mettre à jour maintenant ?`n"
-        $message += "(L'application redémarrera automatiquement)"
+        $updaterScript = "$env:TEMP\updater.ps1"
+        $currentScriptPath = $PSCommandPath
+        $currentVersionPath = "$global:RepoPath\version.txt"
         
-        $result = [System.Windows.MessageBox]::Show(
-            $message,
-            "Mise à jour disponible",
-            [System.Windows.MessageBoxButton]::YesNo,
-            [System.Windows.MessageBoxImage]::Question
-        )
-        
-        if ($result -ne [System.Windows.MessageBoxResult]::Yes) {
-            return
-        }
-        
-        # Créer une sauvegarde
-        $backupPath = "$global:RepoPath\.backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-        try {
-            Write-Host "Création d'une sauvegarde dans $backupPath..."
-            Copy-Item -Path "$global:RepoPath\src" -Destination $backupPath -Recurse -Force
-        } catch {
-            Write-Host "Avertissement : Impossible de créer la sauvegarde : $_"
-        }
-        
-        # Effectuer la mise à jour
-        Push-Location $global:RepoPath
-        
-        $pullOutput = git pull origin 2>&1
-        $pullSuccess = $LASTEXITCODE -eq 0
-        
-        Pop-Location
-        
-        if ($pullSuccess) {
-            [System.Windows.MessageBox]::Show(
-                "Mise à jour effectuée avec succès !`n`nL'application va redémarrer.",
-                "Mise à jour terminée",
-                [System.Windows.MessageBoxButton]::OK,
-                [System.Windows.MessageBoxImage]::Information
-            )
-            
-            # Fermer la fenêtre actuelle
-            $ParentWindow.Close()
-            
-            # Redémarrer l'application
-            Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-            
-        } else {
-            [System.Windows.MessageBox]::Show(
-                "Erreur lors de la mise à jour :`n$pullOutput`n`nVeuillez vérifier votre connexion réseau ou faire la mise à jour manuellement.",
-                "Erreur de mise à jour",
-                [System.Windows.MessageBoxButton]::OK,
-                [System.Windows.MessageBoxImage]::Error
-            )
-        }
-        
+        $updaterCode = @"
+Start-Sleep -Seconds 2
+Copy-Item -Path '$tempScript' -Destination '$currentScriptPath' -Force
+Copy-Item -Path '$tempVersion' -Destination '$currentVersionPath' -Force
+Start-Process -FilePath 'pwsh.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File "$currentScriptPath"' -Verb RunAs
+"@
+        Set-Content -Path $updaterScript -Value $updaterCode
+        Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$updaterScript`""
+        $ParentWindow.Close()
+        exit
     } catch {
-        [System.Windows.MessageBox]::Show(
-            "Erreur inattendue lors de la mise à jour :`n$_",
-            "Erreur",
-            [System.Windows.MessageBoxButton]::OK,
-            [System.Windows.MessageBoxImage]::Error
-        )
+        [System.Windows.MessageBox]::Show("Erreur lors de la mise à jour : $_", "Erreur", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
     }
 }
 
+# --- FONCTIONS MÉTIER ---
 function Find-ADComputer {
-    param(
-        [Parameter(Mandatory=$true)]
-        [string]$SearchString
-    )
+    param([Parameter(Mandatory=$true)][string]$SearchString)
     try {
-        if (-not (Get-Module -Name ActiveDirectory -ErrorAction SilentlyContinue)) {
-            Import-Module ActiveDirectory -ErrorAction Stop
-        }
-        if ([string]::IsNullOrWhiteSpace($SearchString)) {
-            return @()
-        }
+        if (-not (Get-Module -Name ActiveDirectory -ErrorAction SilentlyContinue)) { Import-Module ActiveDirectory -ErrorAction Stop }
+        if ([string]::IsNullOrWhiteSpace($SearchString)) { return @() }
+        
         $filter = "(Name -like '*$SearchString*') -or (Description -like '*$SearchString*')"
         if ($SearchString -match '^[0-9]{1,3}(\.[0-9]{1,3}){0,3}$') {
             $filter = "$filter -or (IPv4Address -like '*$SearchString*')"
         }
-        $computers = Get-ADComputer -Filter $filter -Properties Name, IPv4Address, Description
+        
+        $settings = Get-Settings
+        $searchBaseParam = @{}
+        if (-not [string]::IsNullOrWhiteSpace($settings.SearchBase)) {
+            $searchBaseParam['SearchBase'] = $settings.SearchBase
+        }
+        
+        $computers = Get-ADComputer -Filter $filter -Properties Name, IPv4Address, Description, OperatingSystem @searchBaseParam
         $results = @()
         foreach ($c in $computers) {
-            $results += [PSCustomObject]@{
-                Nom = $c.Name
-                IP = $c.IPv4Address
-                Description = $c.Description
-            }
+            $item = New-Object AdminTools.ComputerItem
+            $item.Nom = $c.Name
+            $item.IP = $c.IPv4Address
+            $item.OS = $c.OperatingSystem
+            $item.Description = $c.Description
+            $results += $item
         }
-        return ,@($results)
-    } catch {
-        return @()
-    }
+        return $results
+    } catch { return @() }
 }
 
-# --- Fenêtre d'authentification WPF ---
-# (SUPPRIMÉ : plus de fenêtre d'authentification ni de credential global)
-
-$currentVersion = Get-CurrentVersion
+$currentVersion = Get-LocalVersion
 $updateAvailable = Test-UpdateAvailable
 
+# --- INTERFACE UTILISATEUR (XAML) ---
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        Title="AdminTools - $currentVersion" Height="640" Width="420" WindowStartupLocation="CenterScreen" ResizeMode="NoResize">
-    <Grid Margin="10">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="180"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-        <Grid Grid.Row="0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="170"/>
-                <ColumnDefinition Width="200"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="Nom d'ordinateur ou IP :" Grid.Column="0" VerticalAlignment="Center"/>
-            <TextBox Name="txtHost" Grid.Column="1" Width="200" Height="22" HorizontalAlignment="Left"/>
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AdminTools - v$currentVersion" Height="720" Width="1150" 
+        WindowStartupLocation="CenterScreen" Background="#181818" Foreground="#E0E0E0"
+        FontFamily="Segoe UI Variable, Segoe UI, Arial">
+    <Window.Resources>
+        <!-- Button Style -->
+        <Style TargetType="Button" x:Key="ModernButton">
+            <Setter Property="Background" Value="#2D2D2D"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#3D3D3D"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="{TemplateBinding BorderThickness}" 
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#3D3D3D"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#4D4D4D"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- TextBox Style -->
+        <Style TargetType="TextBox" x:Key="ModernTextBox">
+            <Setter Property="Background" Value="#202020"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#333333"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="CaretBrush" Value="White"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="{TemplateBinding BorderThickness}" 
+                                CornerRadius="6">
+                            <Grid>
+                                <ScrollViewer x:Name="PART_ContentHost" Margin="0"/>
+                                <TextBlock x:Name="PlaceholderText" Text="Search AD Computers (Name, IP, Description)" 
+                                           Foreground="#888888" Padding="{TemplateBinding Padding}" 
+                                           IsHitTestVisible="False" Visibility="Collapsed" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Text" Value="">
+                                <Setter TargetName="PlaceholderText" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsFocused" Value="True">
+                                <Setter Property="BorderBrush" Value="#4CC2FF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- DataGrid Style -->
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="#333333"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="RowBackground" Value="Transparent"/>
+            <Setter Property="AlternatingRowBackground" Value="#1E1E1E"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="GridLinesVisibility" Value="None"/>
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+            <Setter Property="RowHeight" Value="35"/>
+        </Style>
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#181818"/>
+            <Setter Property="Foreground" Value="#A0A0A0"/>
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderBrush" Value="#333333"/>
+        </Style>
+        <Style TargetType="DataGridRow">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#2C3E50"/>
+                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#2A2A2A"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style TargetType="DataGridCell">
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=DataGridRow}}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridCell">
+                        <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="240"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="280"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Sidebar -->
+        <Border Grid.Column="0" Background="#141414" BorderBrush="#252525" BorderThickness="0,0,1,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <StackPanel Grid.Row="0" Margin="15,20,15,10">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,30">
+                        <TextBlock Text="A" Foreground="#4CC2FF" FontSize="20" FontWeight="Bold" Margin="0,0,10,0"/>
+                        <TextBlock Text="AdminTools" FontSize="18" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <Button Content="💻  Computers" Style="{StaticResource ModernButton}" Background="#2D3D4D" BorderBrush="#4CC2FF" Margin="0,0,0,8"/>
+                    <Button Content="👤  Users (disabled)" Style="{StaticResource ModernButton}" Foreground="#666666" Background="Transparent" BorderThickness="0" IsEnabled="False" Margin="0,0,0,8"/>
+                    <Button Name="btnSettings" Content="⚙  Settings" Style="{StaticResource ModernButton}" Background="Transparent" BorderThickness="0" Margin="0,0,0,25"/>
+                    
+                    <TextBlock Text="Recent Connections" Foreground="#888888" FontWeight="SemiBold" Margin="5,10,0,15"/>
+                    <StackPanel Name="pnlRecentConnections">
+                        <!-- Dynamically populated -->
+                    </StackPanel>
+                </StackPanel>
+                
+                <StackPanel Grid.Row="2" Margin="20,15" Orientation="Horizontal">
+                    <TextBlock Text="Connection status:" Foreground="#888888" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Ellipse Width="10" Height="10" Fill="#4CAF50" Margin="0,0,15,0"/>
+                    <TextBlock Text="Current user: $env:USERNAME" Foreground="#888888" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content -->
+        <Grid Grid.Column="1" Margin="25">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Search Bar -->
+            <TextBox Name="txtHost" Grid.Row="0" Style="{StaticResource ModernTextBox}" Margin="0,0,0,20"/>
+            
+            <!-- DataGrid -->
+            <Border Grid.Row="1" Background="#1C1C1C" BorderBrush="#252525" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+                <DataGrid Name="dataGridResults" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" BorderThickness="0">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Status" Width="60">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Ellipse Width="10" Height="10" Fill="{Binding StatusColor}" HorizontalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Computer Name" Binding="{Binding Nom}" Width="2*"/>
+                        <DataGridTextColumn Header="IP Address" Binding="{Binding IP}" Width="1.5*"/>
+                        <DataGridTextColumn Header="Operating System" Binding="{Binding OS}" Width="2*"/>
+                        <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="2*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
         </Grid>
-        <DataGrid Name="dataGridResults" Grid.Row="1" AutoGenerateColumns="False" Height="160" Margin="0,10,0,0">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Nom" Binding="{Binding Nom}" Width="*"/>
-                <DataGridTextColumn Header="IP" Binding="{Binding IP}" Width="*"/>
-                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*"/>
-            </DataGrid.Columns>
-        </DataGrid>
-        <StackPanel Grid.Row="2" Margin="0,20,0,0" Orientation="Vertical" Width="380">
-            <Button Name="btnPS" Content="Session PowerShell" Height="30" Margin="0,0,0,10"/>
-            <Button Name="btnMSRA" Content="Assistance à distance (MSRA)" Height="30" Margin="0,0,0,10"/>
-            <Button Name="btnRDP" Content="Session RDP" Height="30" Margin="0,0,0,10"/>
-            <Button Name="btnGestion" Content="Gestion de l'ordinateur" Height="30" Margin="0,0,0,10"/>
-            <Button Name="btnCShare" Content="Connexion au disque C: (admin)" Height="30" Margin="0,0,0,10"/>
-        </StackPanel>
-        <Grid Grid.Row="3">
-            <Button Name="btnUpdate" Content="🔄 Mettre à jour" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="0,0,0,10" Width="140"/>
-            <Button Name="btnQuit" Content="Quitter" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,10" Width="100"/>
-        </Grid>
+
+        <!-- Actions Panel -->
+        <Border Grid.Column="2" Background="#181818" BorderBrush="#252525" BorderThickness="1,0,0,0" Padding="25">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <StackPanel Grid.Row="0">
+                    <TextBlock Text="Actions" FontSize="16" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,20"/>
+                    
+                    <Border Background="#202020" CornerRadius="6" Padding="10" Margin="0,0,0,20">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="💻" Margin="0,0,10,0"/>
+                            <TextBlock Name="txtSelectedComputer" Text="Sélectionnez un PC" Foreground="#4CC2FF" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Button Name="btnPS" Content="&gt;_  PowerShell Session (WT)" Style="{StaticResource ModernButton}" Height="45" Margin="0,0,0,12"/>
+                    <Button Name="btnRDP" Content="🖥  Remote Desktop (RDP)" Style="{StaticResource ModernButton}" Height="45" Margin="0,0,0,12"/>
+                    <Button Name="btnMSRA" Content="🤝  MSRA Assistance" Style="{StaticResource ModernButton}" Height="45" Margin="0,0,0,12"/>
+                    <Button Name="btnGestion" Content="⚙  Computer Management" Style="{StaticResource ModernButton}" Height="45" Margin="0,0,0,12"/>
+                    <Button Name="btnCShare" Content="📁  Open C$ Share" Style="{StaticResource ModernButton}" Height="45" Margin="0,0,0,12"/>
+                    <Button Name="btnWOL" Content="⚡  Wake On LAN" Style="{StaticResource ModernButton}" Height="45" Margin="0,0,0,12"/>
+                    <Button Name="btnReboot" Content="🔄  Reboot Computer" Style="{StaticResource ModernButton}" Height="45" Margin="0,0,0,12"/>
+                </StackPanel>
+                
+                <StackPanel Grid.Row="2">
+                    <Button Name="btnUpdate" Content="🔄  Mettre à jour" Style="{StaticResource ModernButton}" Height="40" Margin="0,0,0,10"/>
+                    <Button Name="btnQuit" Content="Quitter" Style="{StaticResource ModernButton}" Height="40" Background="#3D2020" BorderBrush="#5C2D2D" Foreground="#FF8888"/>
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </Window>
 "@
@@ -293,20 +452,93 @@ $btnMSRA = $window.FindName('btnMSRA')
 $btnRDP = $window.FindName('btnRDP')
 $btnGestion = $window.FindName('btnGestion')
 $btnCShare = $window.FindName('btnCShare')
+$btnWOL = $window.FindName('btnWOL')
+$btnReboot = $window.FindName('btnReboot')
+$btnSettings = $window.FindName('btnSettings')
+$txtSelectedComputer = $window.FindName('txtSelectedComputer')
+$global:pnlRecentConnections = $window.FindName('pnlRecentConnections')
 
-# Colorer le bouton Mettre à jour si une MAJ est disponible
+# Initialisation UI
+Update-HistoryUI
+
 if ($updateAvailable) {
     $btnUpdate.Background = [System.Windows.Media.Brushes]::Orange
     $btnUpdate.Content = "🔄 Mettre à jour (nouveau !)"
 }
 
+# --- ÉVÉNEMENTS ---
 $btnQuit.Add_Click({ $window.Close() })
 
-$btnUpdate.Add_Click({
-    Invoke-AutoUpdate -ParentWindow $window
+$btnUpdate.Add_Click({ Invoke-AutoUpdate -ParentWindow $window })
+
+$btnSettings.Add_Click({
+    $settings = Get-Settings
+    [xml]$settingsXaml = @"
+    <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+            Title="Settings" Height="250" Width="400" WindowStartupLocation="CenterOwner"
+            Background="#181818" Foreground="#E0E0E0" FontFamily="Segoe UI Variable, Segoe UI, Arial"
+            ResizeMode="NoResize">
+        <Grid Margin="20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            
+            <TextBlock Text="Theme:" Grid.Row="0" Margin="0,0,0,5"/>
+            <ComboBox Name="cmbTheme" Grid.Row="0" HorizontalAlignment="Right" Width="150">
+                <ComboBoxItem Content="Dark"/>
+                <ComboBoxItem Content="Light"/>
+            </ComboBox>
+            
+            <TextBlock Text="Search Base (OU):" Grid.Row="1" Margin="0,15,0,5"/>
+            <TextBox Name="txtSearchBase" Grid.Row="1" HorizontalAlignment="Right" Width="250" Height="25" Margin="0,15,0,0"/>
+            
+            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Name="btnSave" Content="Save" Width="80" Margin="0,0,10,0" Background="#2D2D2D" Foreground="White"/>
+                <Button Name="btnCancel" Content="Cancel" Width="80" Background="#2D2D2D" Foreground="White"/>
+            </StackPanel>
+        </Grid>
+    </Window>
+"@
+    $reader = (New-Object System.Xml.XmlNodeReader $settingsXaml)
+    $settingsWindow = [Windows.Markup.XamlReader]::Load($reader)
+    $settingsWindow.Owner = $window
+    
+    $cmbTheme = $settingsWindow.FindName('cmbTheme')
+    $txtSearchBase = $settingsWindow.FindName('txtSearchBase')
+    $btnSave = $settingsWindow.FindName('btnSave')
+    $btnCancel = $settingsWindow.FindName('btnCancel')
+    
+    $cmbTheme.Text = $settings.Theme
+    $txtSearchBase.Text = $settings.SearchBase
+    
+    $btnCancel.Add_Click({ $settingsWindow.Close() })
+    $btnSave.Add_Click({
+        $settings.Theme = $cmbTheme.Text
+        $settings.SearchBase = $txtSearchBase.Text
+        Save-Settings $settings
+        $settingsWindow.Close()
+        [System.Windows.MessageBox]::Show("Settings saved. Some changes may require a restart.", "Settings", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information)
+    })
+    
+    $settingsWindow.ShowDialog() | Out-Null
+})
+
+$dataGrid.Add_SelectionChanged({
+    $selected = $dataGrid.SelectedItem
+    if ($selected) {
+        $txtSelectedComputer.Text = $selected.Nom
+    } else {
+        $txtSelectedComputer.Text = "Sélectionnez un PC"
+    }
 })
 
 $txtHost.Add_KeyUp({
+    param($sender, $e)
+    if ($e.Key -eq 'Enter') { return } # Géré par KeyDown
+    
     $search = $txtHost.Text.Trim()
     if (-not $search) {
         $dataGrid.ItemsSource = $null
@@ -316,6 +548,52 @@ $txtHost.Add_KeyUp({
     $dataGrid.ItemsSource = $null
     if ($results.Count -gt 0) {
         $dataGrid.ItemsSource = $results
+        
+        # Ping asynchrone
+        $runspacePool = [runspacefactory]::CreateRunspacePool(1, 5)
+        $runspacePool.Open()
+        $jobs = @()
+        
+        foreach ($item in $results) {
+            if (-not [string]::IsNullOrWhiteSpace($item.IP)) {
+                $pipeline = [powershell]::Create().AddScript({
+                    param($ip)
+                    return Test-Connection -ComputerName $ip -Count 1 -Quiet -ErrorAction SilentlyContinue
+                }).AddArgument($item.IP)
+                $pipeline.RunspacePool = $runspacePool
+                $jobs += [PSCustomObject]@{
+                    Pipeline = $pipeline
+                    AsyncResult = $pipeline.BeginInvoke()
+                    Item = $item
+                    Processed = $false
+                }
+            }
+        }
+        
+        $timer = New-Object System.Windows.Threading.DispatcherTimer
+        $timer.Interval = [TimeSpan]::FromMilliseconds(200)
+        $timer.Add_Tick({
+            $allDone = $true
+            foreach ($job in $jobs) {
+                if ($job.AsyncResult.IsCompleted -and -not $job.Processed) {
+                    $job.Processed = $true
+                    $pingResult = $job.Pipeline.EndInvoke($job.AsyncResult)
+                    $job.Pipeline.Dispose()
+                    if ($pingResult) {
+                        $job.Item.StatusColor = "#4CAF50" # Vert
+                    } else {
+                        $job.Item.StatusColor = "#F44336" # Rouge
+                    }
+                }
+                if (-not $job.Processed) { $allDone = $false }
+            }
+            if ($allDone) {
+                $timer.Stop()
+                $runspacePool.Close()
+                $runspacePool.Dispose()
+            }
+        })
+        $timer.Start()
     }
 })
 
@@ -330,6 +608,7 @@ $btnPS.Add_Click({
     $selected = $dataGrid.SelectedItem
     if (-not $selected) { return }
     $target = $selected.Nom
+    Add-ToHistory $target
 
     Start-Process wt.exe -ArgumentList @(
         "powershell.exe",
@@ -343,6 +622,7 @@ $btnMSRA.Add_Click({
     $selected = $dataGrid.SelectedItem
     if (-not $selected) { return }
     $target = $selected.Nom
+    Add-ToHistory $target
 
     Start-Process msra.exe -ArgumentList "/offerra $target"
 })
@@ -351,37 +631,20 @@ $btnRDP.Add_Click({
     $selected = $dataGrid.SelectedItem
     if (-not $selected) { return }
     $target = $selected.Nom
+    Add-ToHistory $target
 
-    # Récupère le nom d'utilisateur courant et nettoie pour le nom de fichier
     $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name -replace '[\\/:*?"<>|]', '-'
-
-    # Date et heure pour le nom du fichier
     $now = Get-Date -Format "yyyy-MM-dd-HH-mm-ss"
+    $destDir = 'C:\temp\RDP'
+    if (-not (Test-Path $destDir)) { New-Item -Path $destDir -ItemType Directory | Out-Null }
 
-    # Dossier de destination
-    $destDir = 'C:\\temp\\RDP'
-    if (-not (Test-Path $destDir)) {
-        New-Item -Path $destDir -ItemType Directory | Out-Null
-    }
-
-    # Chemin du fichier temporaire
     $tempRdp = [System.IO.Path]::Combine($env:TEMP, 'MyConnection.rdp')
-    # Chemin du fichier final
-    $finalRdp = "$destDir\\RDP-$user-$now.rdp"
+    $finalRdp = "$destDir\RDP-$user-$now.rdp"
 
-    # Génère le fichier RDP de base
     $rdpContent = "full address:s:$target`r`nusername:s:$user`r`n"
     Set-Content -Path $tempRdp -Value $rdpContent -Encoding ASCII
 
-    # Déplace et renomme le fichier (en gérant les erreurs)
-    try {
-        Move-Item -Path $tempRdp -Destination $finalRdp -Force
-    } catch {
-        Write-Host "Erreur lors du déplacement du fichier RDP : $_"
-        return
-    }
-
-    # Ouvre la connexion RDP avec le fichier généré
+    try { Move-Item -Path $tempRdp -Destination $finalRdp -Force } catch { return }
     Start-Process mstsc.exe -ArgumentList $finalRdp
 })
 
@@ -389,6 +652,7 @@ $btnGestion.Add_Click({
     $selected = $dataGrid.SelectedItem
     if (-not $selected) { return }
     $target = $selected.Nom
+    Add-ToHistory $target
 
     Start-Process compmgmt.msc -ArgumentList "/computer:\\$target" -Verb RunAs
 })
@@ -397,31 +661,99 @@ $btnCShare.Add_Click({
     $selected = $dataGrid.SelectedItem
     if (-not $selected) { return }
     $target = $selected.Nom
+    Add-ToHistory $target
 
     $share = "\\$target\C$"
     Start-Process explorer.exe $share -Verb RunAs
 })
 
+$btnWOL.Add_Click({
+    $selected = $dataGrid.SelectedItem
+    if (-not $selected) { return }
+    $target = $selected.Nom
+    
+    # Récupérer l'adresse MAC via ARP (nécessite que le PC ait été pingé récemment ou soit dans le même sous-réseau)
+    # Si le PC est éteint depuis longtemps, ARP ne fonctionnera pas. Il faudrait idéalement stocker les adresses MAC.
+    # Pour cet exemple, on tente de récupérer l'adresse MAC via WMI/ARP ou on demande à l'utilisateur.
+    
+    $ip = $selected.IP
+    if (-not $ip) {
+        [System.Windows.MessageBox]::Show("Adresse IP introuvable pour $target.", "Erreur WOL", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
+        return
+    }
+
+    # Tentative de récupération de l'adresse MAC via ARP
+    $arpOutput = arp -a $ip | Select-String -Pattern "([0-9a-f]{2}[:-]){5}[0-9a-f]{2}"
+    $macAddress = $null
+    
+    if ($arpOutput) {
+        $macAddress = $arpOutput.Matches.Value -replace '-', ':'
+    } else {
+        # Si ARP échoue, on demande l'adresse MAC à l'utilisateur
+        $macAddress = [Microsoft.VisualBasic.Interaction]::InputBox("Impossible de trouver l'adresse MAC automatiquement.`nEntrez l'adresse MAC pour $target :", "Wake On LAN", "00:00:00:00:00:00")
+        if ([string]::IsNullOrWhiteSpace($macAddress)) { return }
+    }
+
+    try {
+        $macBytes = $macAddress.Split(':-') | ForEach-Object { [byte]("0x$_") }
+        if ($macBytes.Length -ne 6) { throw "Format d'adresse MAC invalide." }
+
+        $magicPacket = [byte[]]::new(102)
+        for ($i = 0; $i -lt 6; $i++) { $magicPacket[$i] = 255 }
+        for ($i = 1; $i -lt 17; $i++) {
+            for ($j = 0; $j -lt 6; $j++) {
+                $magicPacket[$i * 6 + $j] = $macBytes[$j]
+            }
+        }
+
+        $udpClient = New-Object System.Net.Sockets.UdpClient
+        $udpClient.Connect([System.Net.IPAddress]::Broadcast, 9)
+        $udpClient.Send($magicPacket, $magicPacket.Length) | Out-Null
+        $udpClient.Close()
+
+        [System.Windows.MessageBox]::Show("Paquet magique envoyé à $target ($macAddress).", "Wake On LAN", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information)
+    } catch {
+        [System.Windows.MessageBox]::Show("Erreur lors de l'envoi du paquet WOL : $_", "Erreur WOL", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
+    }
+})
+
+$btnReboot.Add_Click({
+    $selected = $dataGrid.SelectedItem
+    if (-not $selected) { return }
+    $target = $selected.Nom
+    
+    $result = [System.Windows.MessageBox]::Show(
+        "Êtes-vous sûr de vouloir redémarrer l'ordinateur $target ?",
+        "Confirmation de redémarrage",
+        [System.Windows.MessageBoxButton]::YesNo,
+        [System.Windows.MessageBoxImage]::Warning
+    )
+    
+    if ($result -eq [System.Windows.MessageBoxResult]::Yes) {
+        try {
+            Restart-Computer -ComputerName $target -Force -ErrorAction Stop
+            [System.Windows.MessageBox]::Show("La commande de redémarrage a été envoyée à $target.", "Redémarrage", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information)
+        } catch {
+            [System.Windows.MessageBox]::Show("Erreur lors du redémarrage de $target : $_", "Erreur", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
+        }
+    }
+})
+
 if (-not ($args -contains '-ProfileManager')) {
-    # Vérification discrète des mises à jour au démarrage (en arrière-plan)
     $window.Dispatcher.InvokeAsync({
-        Start-Sleep -Seconds 2  # Attendre que l'interface soit chargée
-        
+        Start-Sleep -Seconds 2
         if (Test-UpdateAvailable) {
-            # Notification discrète
             $result = [System.Windows.MessageBox]::Show(
                 "Une nouvelle version d'AdminTools est disponible !`n`nVoulez-vous voir les détails ?",
                 "Mise à jour disponible",
                 [System.Windows.MessageBoxButton]::YesNo,
                 [System.Windows.MessageBoxImage]::Information
             )
-            
             if ($result -eq [System.Windows.MessageBoxResult]::Yes) {
                 Invoke-AutoUpdate -ParentWindow $window
             }
         }
     }.GetNewClosure()) | Out-Null
     
-    # Afficher la fenêtre en mode modal
     $window.ShowDialog() | Out-Null
 }
